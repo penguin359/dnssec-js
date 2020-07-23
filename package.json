@@ -4,7 +4,8 @@
   "description": "DNSSEC library",
   "main": "dns.js",
   "scripts": {
-    "test": "jasmine"
+    "test": "jasmine",
+    "watch": "npm-watch test"
   },
   "repository": {
     "type": "git",
@@ -20,6 +21,11 @@
   },
   "homepage": "https://github.com/penguin359/dnssec-js#readme",
   "devDependencies": {
-    "jasmine": "^3.5.0"
+    "jasmine": "^3.5.0",
+    "npm-watch": "^0.6.0",
+    "rewire": "^5.0.0"
+  },
+  "watch": {
+    "test": "{*.js,spec/**.js}"
   }
 }
