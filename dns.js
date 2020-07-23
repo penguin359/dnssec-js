@@ -19,6 +19,15 @@ const opcodes = {
     update: 5 * (1 << 11),
     dso:    6 * (1 << 11),
 };
+const opcode_mask = 0xf << 11;
+
+function find_opcode(value) {
+    for(name in opcodes) {
+        if(opcodes[name] === value) {
+            return name;
+        }
+    }
+}
 
 // DNS response code
 const rcodes = [
@@ -143,6 +152,7 @@ const rcodes = [
         standard: "[RFC7873]",
     },
 ];
+const rcode_mask = 0xf;
 
 // DNS header flags
 const flags = {
@@ -154,6 +164,20 @@ const flags = {
     CD: 1 << 4,
 };
 
+function find_flags(value) {
+    list = [];
+    for(name in flags) {
+        if((flags[name] & value) === flags[name]) {
+            list.push(name);
+        }
+    }
+    return list;
+}
+
+function decode_a(value) {
+    return `${value.getUint8(0)}.${value.getUint8(1)}.${value.getUint8(2)}.${value.getUint8(3)}`;
+}
+
 // Resource Record types
 const rrtype = [
     {
@@ -161,6 +185,7 @@ const rrtype = [
         name: "A",
         descr: "a host address",
         standard: "[RFC1035]",
+        decode: decode_a,
     },
     {
         code: 2,
@@ -431,6 +456,7 @@ const rrtype = [
         name: "RRSIG",
         descr: "RRSIG",
         standard: "[RFC4034][RFC3755]",
+        decode: function() { return "RR"; },
     },
     {
         code: 47,
@@ -695,29 +721,29 @@ const rrtype = [
 // Resource Record classes
 const rrclass = [
     {
-	code: 1,
-	name: "IN",
-	descr: "Internet",
+        code: 1,
+        name: "IN",
+        descr: "Internet",
     },
     {
-	code: 3,
-	name: "CH",
-	descr: "Chaos",
+        code: 3,
+        name: "CH",
+        descr: "Chaos",
     },
     {
-	code: 4,
-	name: "HS",
-	descr: "Hesiod",
+        code: 4,
+        name: "HS",
+        descr: "Hesiod",
     },
     {
-	code: 254,
-	name: "NONE",
-	descr: "QCLASS NONE",
+        code: 254,
+        name: "NONE",
+        descr: "QCLASS NONE",
     },
     {
-	code: 255,
-	name: "ANY",
-	descr: "QCLASS *",
+        code: 255,
+        name: "ANY",
+        descr: "QCLASS *",
     },
 ];
 
@@ -731,17 +757,26 @@ var onReceive = function(info) {
 
 function decode(data) {
     console.log(data);
+    var msg = {};
     var ad_flag = 1 << 5;
     var view = new DataView(data);
     var ptr = 0;
-    var id = view.getUint16(ptr);      ptr += 2;
+    msg.id = view.getUint16(ptr);      ptr += 2;
     var header = view.getUint16(ptr);   ptr += 2;
+    msg.opcode = find_opcode(header & opcode_mask);
+    msg.response = (header & qr_bit) === qr_bit;
+    msg.rcode = rcodes.find(item => item.code === (header & rcode_mask)).name;
+    msg.flags = find_flags(header);
+    msg.question = [];
+    msg.answer = [];
+    msg.authority = [];
+    msg.additional = [];
     var qdcount = view.getUint16(ptr); ptr += 2;
     var ancount = view.getUint16(ptr); ptr += 2;
     var nscount = view.getUint16(ptr); ptr += 2;
     var arcount = view.getUint16(ptr); ptr += 2;
     for(var i = 0; i < qdcount; i++) {
-	var name = ''
+        var name = ''
         while(true) {
             var len = view.getUint8(ptr); ptr += 1;
             if((len & 0xc0) == 0xc0) {
@@ -753,25 +788,28 @@ function decode(data) {
             if(len == 0) {
                 break;  // End of DNS name
             }
-	    for(var j = 0; j < len; j++) {
-		name += String.fromCharCode(view.getUint8(ptr++))
-	    }
-	    name += '.'
-	}
-	var type = view.getUint16(ptr); ptr += 2;
-	var class_ = view.getUint16(ptr); ptr += 2;
-	console.log(`Q was ${name}, type: ${type}, class: ${class_}`);
+            for(var j = 0; j < len; j++) {
+                name += String.fromCharCode(view.getUint8(ptr++))
+            }
+            name += '.'
+        }
+        var type = view.getUint16(ptr); ptr += 2;
+        var class_ = view.getUint16(ptr); ptr += 2;
+        type = rrtype.find(item => item.code === type).name;
+        class_ = rrclass.find(item => item.code === class_).name;
+        msg.question.push({name: name, type: type, class: class_});
+        console.log(`Q was ${name}, type: ${type}, class: ${class_}`);
     }
     for(var i = 0; i < ancount; i++) {
-	next_ptr = 0;
-	var name = ''
+        next_ptr = 0;
+        var name = ''
         while(true) {
             var len = view.getUint8(ptr); ptr += 1;
             if((len & 0xc0) == 0xc0) {
-		var offset = ((len & ~0xc0) << 8) | view.getUint8(ptr);
-		ptr += 1;
-		next_ptr = ptr;
-		ptr = offset;
+                var offset = ((len & ~0xc0) << 8) | view.getUint8(ptr);
+                ptr += 1;
+                next_ptr = ptr;
+                ptr = offset;
                 //break;  // Compressed DNS name
             } else
             if(len > 63) {
@@ -780,30 +818,34 @@ function decode(data) {
             if(len == 0) {
                 break;  // End of DNS name
             } else {
-		for(var j = 0; j < len; j++) {
-		    name += String.fromCharCode(view.getUint8(ptr++))
-		}
-		name += '.'
-	    }
-	}
-	if(next_ptr > 0) {
-	    ptr = next_ptr;
-	}
-	var type = view.getUint16(ptr); ptr += 2;
-	var class_ = view.getUint16(ptr); ptr += 2;
-	var ttl = view.getInt32(ptr); ptr += 4;
-	var rdlength = view.getUint16(ptr); ptr += 2;
-	var rdata = [];
-	console.log(`Record name: ${name}, type: ${type}, len: ${rdlength}`);
-	for(var j = 0; j < rdlength; j++) {
-	    rdata.push(view.getUint8(ptr++))
-	}
-	if(type == 1) {
-	    var value = `${rdata[0]}.${rdata[1]}.${rdata[2]}.${rdata[3]}`;
-	    console.log(`Value: ${value}`);
-	}
-	console.log(`A was ${name}`);
+                for(var j = 0; j < len; j++) {
+                    name += String.fromCharCode(view.getUint8(ptr++))
+                }
+                name += '.'
+            }
+        }
+        if(next_ptr > 0) {
+            ptr = next_ptr;
+        }
+        var type = view.getUint16(ptr); ptr += 2;
+        var class_ = view.getUint16(ptr); ptr += 2;
+        type = rrtype.find(item => item.code === type).name;
+        class_ = rrclass.find(item => item.code === class_).name;
+        var ttl = view.getInt32(ptr); ptr += 4;
+        var rdlength = view.getUint16(ptr); ptr += 2;
+        console.log(`Record name: ${name}, type: ${type}, len: ${rdlength}`);
+        var rdata = data.slice(ptr, ptr+rdlength);
+        var rview = new DataView(rdata);
+        ptr += rdlength;
+        var a = rrtype.find(item => item.name == type);
+        if(a.decode) {
+            var value = a.decode(rview);
+            console.log(`RValue: ${value}`);
+        }
+        console.log(`A was ${name}`);
+        msg.answer.push({name: name, type: type, class: class_, ttl: ttl, rdata: rdata});
     }
+    console.log(msg);
     if((header & ad_flag) == ad_flag) {
         console.log("Authenticated data for '" + domain + "': 0x" + header.toString(16) + "!");
     } else {
@@ -812,7 +854,6 @@ function decode(data) {
 }
 
 function DNSRequest(domain) {
-    
     var arrayBuffer = new ArrayBuffer(4096);
     var view = new DataView(arrayBuffer);
     var fields = {
@@ -849,7 +890,7 @@ function DNSRequest(domain) {
         }
         view.setUint8(ptr++, 0); /* zero-length root label */
         view.setUint16(ptr, rrtype.find(item => item.name == fields.question[i].type).code);   ptr += 2;
-	console.log(rrclass[0].descr);
+        //console.log(rrclass[0].descr);
         view.setUint16(ptr, rrclass.find(item => item.name == fields.question[i].class).code); ptr += 2;
     }
     for(var i = 0; i < fields.additional.length; i++) {
@@ -949,6 +990,7 @@ server.on('error', (err) => {
 server.on('message', (msg, rinfo) => {
     console.log(`Message: ${typeof msg}`);
     console.log(`server got: ${msg} from ${rinfo.address}:${rinfo.port}`);
+    console.log("decoding...");
     function toArrayBuffer(buf) {
         var ab = new ArrayBuffer(buf.length);
         var view = new Uint8Array(ab);
