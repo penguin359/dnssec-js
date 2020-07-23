@@ -1,0 +1,25 @@
+{
+  "name": "dnssec",
+  "version": "0.1.0",
+  "description": "DNSSEC library",
+  "main": "dns.js",
+  "scripts": {
+    "test": "dns"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/penguin359/dnssec-js.git"
+  },
+  "keywords": [
+    "DNS"
+  ],
+  "author": "Loren M. Lang",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/penguin359/dnssec-js/issues"
+  },
+  "homepage": "https://github.com/penguin359/dnssec-js#readme",
+  "devDependencies": {
+    "jasmine": "^3.5.0"
+  }
+}

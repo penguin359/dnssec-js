@@ -1,9 +1,11 @@
+'use strict';
+
 //const domain = "www.google.com";
 const domain = "www.north-winds.org";
 //const domain = "www.alzatex.com";
-//const dns_server = "8.8.8.8";
+const dns_server = "8.8.8.8";
 //const dns_server = "10.248.2.1";
-const dns_server = "ns.tallye.com";
+//const dns_server = "ns.tallye.com";
 
 
 // DNS Header values
