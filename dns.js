@@ -1,8 +1,9 @@
 //const domain = "www.google.com";
 const domain = "www.north-winds.org";
 //const domain = "www.alzatex.com";
-const dns_server = "8.8.8.8";
+//const dns_server = "8.8.8.8";
 //const dns_server = "10.248.2.1";
+const dns_server = "ns.tallye.com";
 
 
 // DNS Header values
@@ -755,6 +756,69 @@ var onReceive = function(info) {
     decode(info.data);
 }
 
+function decode_name(view, offset, packet_view) {
+    // TODO Check for compressed pointer to compress.
+    // TODO Check for long DNS name
+    // TODO Check for multiple compression layers
+    // TODO Check for uncompressed DNS name support
+    // TODO Check for broken DNS names
+    next_ptr = 0;
+    var name = ''
+    while(true) {
+        var len = view.getUint8(offset); offset += 1;
+        if((len & 0xc0) == 0xc0) {
+            var offset = ((len & ~0xc0) << 8) | view.getUint8(offset);
+            offset += 1;
+            next_ptr = offset;
+            offset = offset;
+            view = packet_view;
+            //break;  // Compressed DNS name
+        } else
+        if(len > 63) {
+            fail;  // Broken DNS packet
+        } else
+        if(len == 0) {
+            break;  // End of DNS name
+        } else {
+            for(var j = 0; j < len; j++) {
+                name += String.fromCharCode(view.getUint8(offset++))
+            }
+            name += '.'
+        }
+    }
+    if(next_ptr > 0) {
+        offset = next_ptr;
+    }
+
+    return [offset, name];
+}
+
+function decode_record_header(view, offset) {
+    var [ptr, name] = decode_name(view, offset, view);
+    var type = view.getUint16(ptr); ptr += 2;
+    var class_ = view.getUint16(ptr); ptr += 2;
+    type = rrtype.find(item => item.code === type).name;
+    class_ = rrclass.find(item => item.code === class_).name;
+    return [ptr, name, type, class_];
+}
+
+function decode_record(view, offset) {
+    var name, type, class_;
+    [offset, name, type, class_] = decode_record_header(view, offset);
+    var ttl = view.getInt32(offset); offset += 4;
+    var rdlength = view.getUint16(offset); offset += 2;
+    console.log(`Record name: ${name}, type: ${type}, len: ${rdlength}`);
+    var rdata = view.buffer.slice(offset, offset+rdlength);
+    var rview = new DataView(rdata);
+    offset += rdlength;
+    var a = rrtype.find(item => item.name == type);
+    if(a.decode) {
+        var value = a.decode(rview);
+        console.log(`RValue: ${value}`);
+    }
+    return [offset, name, type, class_, ttl, rdata];
+}
+
 function decode(data) {
     console.log(data);
     var msg = {};
@@ -776,74 +840,28 @@ function decode(data) {
     var nscount = view.getUint16(ptr); ptr += 2;
     var arcount = view.getUint16(ptr); ptr += 2;
     for(var i = 0; i < qdcount; i++) {
-        var name = ''
-        while(true) {
-            var len = view.getUint8(ptr); ptr += 1;
-            if((len & 0xc0) == 0xc0) {
-                break;  // Compressed DNS name
-            }
-            if(len > 63) {
-                fail;  // Broken DNS packet
-            }
-            if(len == 0) {
-                break;  // End of DNS name
-            }
-            for(var j = 0; j < len; j++) {
-                name += String.fromCharCode(view.getUint8(ptr++))
-            }
-            name += '.'
-        }
-        var type = view.getUint16(ptr); ptr += 2;
-        var class_ = view.getUint16(ptr); ptr += 2;
-        type = rrtype.find(item => item.code === type).name;
-        class_ = rrclass.find(item => item.code === class_).name;
+        var name, type, class_;
+        [ptr, name, type, class_] = decode_record_header(view, ptr);
         msg.question.push({name: name, type: type, class: class_});
         console.log(`Q was ${name}, type: ${type}, class: ${class_}`);
     }
     for(var i = 0; i < ancount; i++) {
-        next_ptr = 0;
-        var name = ''
-        while(true) {
-            var len = view.getUint8(ptr); ptr += 1;
-            if((len & 0xc0) == 0xc0) {
-                var offset = ((len & ~0xc0) << 8) | view.getUint8(ptr);
-                ptr += 1;
-                next_ptr = ptr;
-                ptr = offset;
-                //break;  // Compressed DNS name
-            } else
-            if(len > 63) {
-                fail;  // Broken DNS packet
-            } else
-            if(len == 0) {
-                break;  // End of DNS name
-            } else {
-                for(var j = 0; j < len; j++) {
-                    name += String.fromCharCode(view.getUint8(ptr++))
-                }
-                name += '.'
-            }
-        }
-        if(next_ptr > 0) {
-            ptr = next_ptr;
-        }
-        var type = view.getUint16(ptr); ptr += 2;
-        var class_ = view.getUint16(ptr); ptr += 2;
-        type = rrtype.find(item => item.code === type).name;
-        class_ = rrclass.find(item => item.code === class_).name;
-        var ttl = view.getInt32(ptr); ptr += 4;
-        var rdlength = view.getUint16(ptr); ptr += 2;
-        console.log(`Record name: ${name}, type: ${type}, len: ${rdlength}`);
-        var rdata = data.slice(ptr, ptr+rdlength);
-        var rview = new DataView(rdata);
-        ptr += rdlength;
-        var a = rrtype.find(item => item.name == type);
-        if(a.decode) {
-            var value = a.decode(rview);
-            console.log(`RValue: ${value}`);
-        }
+        var name, type, class_, ttl, rdata;
+        [ptr, name, type, class_, ttl, rdata] = decode_record(view, ptr);
         console.log(`A was ${name}`);
         msg.answer.push({name: name, type: type, class: class_, ttl: ttl, rdata: rdata});
+    }
+    for(var i = 0; i < nscount; i++) {
+        var name, type, class_, ttl, rdata;
+        [ptr, name, type, class_, ttl, rdata] = decode_record(view, ptr);
+        console.log(`N was ${name}`);
+        msg.authority.push({name: name, type: type, class: class_, ttl: ttl, rdata: rdata});
+    }
+    for(var i = 0; i < arcount; i++) {
+        var name, type, class_, ttl, rdata;
+        [ptr, name, type, class_, ttl, rdata] = decode_record(view, ptr);
+        console.log(`R was ${name}`);
+        msg.additional.push({name: name, type: type, class: class_, ttl: ttl, rdata: rdata});
     }
     console.log(msg);
     if((header & ad_flag) == ad_flag) {
@@ -989,7 +1007,7 @@ server.on('error', (err) => {
 
 server.on('message', (msg, rinfo) => {
     console.log(`Message: ${typeof msg}`);
-    console.log(`server got: ${msg} from ${rinfo.address}:${rinfo.port}`);
+    //console.log(`server got: ${msg} from ${rinfo.address}:${rinfo.port}`);
     console.log("decoding...");
     function toArrayBuffer(buf) {
         var ab = new ArrayBuffer(buf.length);
