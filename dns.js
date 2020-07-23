@@ -1,19 +1,27 @@
 //const domain = "www.google.com";
 const domain = "www.north-winds.org";
 //const domain = "www.alzatex.com";
-//const dns_server = "8.8.8.8";
-const dns_server = "10.248.2.1";
+const dns_server = "8.8.8.8";
+//const dns_server = "10.248.2.1";
 
-const opcode = {
-    query: 0,
-    iquery: 1,
-    status: 2,
-    notify: 4,
-    update: 5,
-    dso: 6,
+
+// DNS Header values
+
+// DNS message is a Query Response
+const qr_bit = 1 << 15;
+
+// DNS operation
+const opcodes = {
+    query:  0 * (1 << 11),
+    iquery: 1 * (1 << 11),
+    status: 2 * (1 << 11),
+    notify: 4 * (1 << 11),
+    update: 5 * (1 << 11),
+    dso:    6 * (1 << 11),
 };
 
-const rcode = [
+// DNS response code
+const rcodes = [
     {
         code: 0,
         name: "NoError",
@@ -136,6 +144,17 @@ const rcode = [
     },
 ];
 
+// DNS header flags
+const flags = {
+    AA: 1 << 10,
+    TC: 1 << 9,
+    RD: 1 << 8,
+    RA: 1 << 7,
+    AD: 1 << 5,
+    CD: 1 << 4,
+};
+
+// Resource Record types
 const rrtype = [
     {
         code: 1,
@@ -673,6 +692,7 @@ const rrtype = [
     },
 ];
 
+// Resource Record classes
 const rrclass = [
     {
 	code: 1,
@@ -715,7 +735,7 @@ function decode(data) {
     var view = new DataView(data);
     var ptr = 0;
     var id = view.getUint16(ptr);      ptr += 2;
-    var flags = view.getUint16(ptr);   ptr += 2;
+    var header = view.getUint16(ptr);   ptr += 2;
     var qdcount = view.getUint16(ptr); ptr += 2;
     var ancount = view.getUint16(ptr); ptr += 2;
     var nscount = view.getUint16(ptr); ptr += 2;
@@ -784,32 +804,43 @@ function decode(data) {
 	}
 	console.log(`A was ${name}`);
     }
-    if((flags & ad_flag) == ad_flag) {
-        console.log("Authenticated data for '" + domain + "': 0x" + flags.toString(16) + "!");
+    if((header & ad_flag) == ad_flag) {
+        console.log("Authenticated data for '" + domain + "': 0x" + header.toString(16) + "!");
     } else {
-        console.log("Not authentic for '" + domain + "': 0x" + flags.toString(16) + "!");
+        console.log("Not authentic for '" + domain + "': 0x" + header.toString(16) + "!");
     }
 }
 
 function DNSRequest(domain) {
+    
     var arrayBuffer = new ArrayBuffer(4096);
     var view = new DataView(arrayBuffer);
-    var id = Math.floor(Math.random()*65536);
-    var rd_flag = 1 << 8;
-    var flags = rd_flag;
-    var question = [ domain ];
-    var answer = [];
-    var authority = [];
-    var additional = [ "" ];
+    var fields = {
+        id: Math.floor(Math.random()*65536),
+        opcode: "QUERY",
+        response: false,
+        rcode: "nOeRror",
+        flags: [ "RD", "AD" ],
+        question: [ { name: domain, type: "A", class: "IN" } ],
+        answer: [],
+        authority: [],
+        additional: [ { name: "", type: "OPT" } ],
+    };
+    var header = opcodes[fields.opcode.toLowerCase()];
+    if(fields.response) {
+        header |= qr_bit;
+    }
+    header |= fields.flags.map(item => flags[item]).reduce((item, value) => item | value);
+    header |= rcodes.find(item => item.name.toLowerCase() == fields.rcode.toLowerCase()).code;
     var ptr = 0;
-    view.setUint16(ptr, id);                ptr += 2;
-    view.setUint16(ptr, flags);             ptr += 2;
-    view.setUint16(ptr, question.length);   ptr += 2;
-    view.setUint16(ptr, answer.length);     ptr += 2;
-    view.setUint16(ptr, authority.length);  ptr += 2;
-    view.setUint16(ptr, additional.length); ptr += 2;
-    for(var i = 0; i < question.length; i++) {
-        var labels = question[i].split('.');
+    view.setUint16(ptr, fields.id);                ptr += 2;
+    view.setUint16(ptr, header);                   ptr += 2;
+    view.setUint16(ptr, fields.question.length);   ptr += 2;
+    view.setUint16(ptr, fields.answer.length);     ptr += 2;
+    view.setUint16(ptr, fields.authority.length);  ptr += 2;
+    view.setUint16(ptr, fields.additional.length); ptr += 2;
+    for(var i = 0; i < fields.question.length; i++) {
+        var labels = fields.question[i].name.split('.');
         for(var j = 0; j < labels.length; j++) {
             var label = labels[j];
             view.setUint8(ptr++, label.length);
@@ -817,13 +848,13 @@ function DNSRequest(domain) {
                 view.setUint8(ptr++, label.charCodeAt(k));
         }
         view.setUint8(ptr++, 0); /* zero-length root label */
-        view.setUint16(ptr, rrtype.find(item => item.name == "A").code);   ptr += 2;
+        view.setUint16(ptr, rrtype.find(item => item.name == fields.question[i].type).code);   ptr += 2;
 	console.log(rrclass[0].descr);
-        view.setUint16(ptr, rrclass.find(item => item.name == "IN").code); ptr += 2;
+        view.setUint16(ptr, rrclass.find(item => item.name == fields.question[i].class).code); ptr += 2;
     }
-    for(var i = 0; i < additional.length; i++) {
-        if(additional[i] != "") {
-            var labels = additional[i].split('.');
+    for(var i = 0; i < fields.additional.length; i++) {
+        if(fields.additional[i].name != "") {
+            var labels = fields.additional[i].split('.');
             for(var j = 0; j < labels.length; j++) {
                 var label = labels[j];
                 view.setUint8(ptr++, label.length);
@@ -832,7 +863,7 @@ function DNSRequest(domain) {
             }
         }
         view.setUint8(ptr++, 0); /* zero-length root label */
-        view.setUint16(ptr, rrtype.find(item => item.name == "A").code);   ptr += 2;
+        view.setUint16(ptr, rrtype.find(item => item.name == fields.additional[i].type).code);   ptr += 2;
         view.setUint16(ptr, 4096); ptr += 2;
         view.setUint8(ptr,  0); ptr += 1;
         view.setUint8(ptr,  0); ptr += 1;
