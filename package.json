@@ -4,7 +4,7 @@
   "description": "DNSSEC library",
   "main": "dns.js",
   "scripts": {
-    "test": "dns"
+    "test": "jasmine"
   },
   "repository": {
     "type": "git",
