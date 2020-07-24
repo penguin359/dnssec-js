@@ -176,8 +176,8 @@ describe("lib", function() {
           }
 
           packLabels(labels) {
-              for(label in labels) {
-                  this.packLabel(label);
+              for(var idx in labels) {
+                  this.packLabel(labels[idx]);
               }
           }
 
@@ -192,19 +192,25 @@ describe("lib", function() {
       }
 
       var packer = new Packer(view);
-      packer.packLabel('delete');
+      packer.packLabels(['delete']);
       var www_offset = packer.getOffset();
-      packer.packLabel('www');
+      packer.packLabels(['www']);
       var test_offset = packer.getOffset();
-      packer.packLabel('test');
-      packer.packLabel('com');
-      packer.packLabel('');
+      packer.packLabels(['test', 'com', '.']);
       var ns_offset = packer.getOffset();
-      packer.packLabel('ns');
+      packer.packLabels(['ns']);
       packer.packPointer(test_offset);
       var start_offset = packer.getOffset();
-      packer.packLabel('child');
+      packer.packLabels(['child']);
       packer.packPointer(ns_offset);
+
+      /*
+      var raw = [];
+      for(var i = 0; i < 64; i++) {
+          raw.push(view.getUint8(i));
+      }
+      console.log(raw);
+      */
 
       var [offset, name] = decodeName(view, start_offset, view);
       expect(name).toBe('child.ns.test.com.');
