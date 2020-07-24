@@ -749,11 +749,18 @@ function decodeName(view, offset, packetView) {
     // TODO Check for uncompressed DNS name support
     // TODO Check for broken DNS names
     // TODO Check duplicate DNS names
+    // TODO Check for exact DNS limits
+    // TODO Check for label truncated
+    // TODO Check for pointer outside range
     var nextPtr = 0;
     var name = ''
+    var follow = false;
     while(true) {
         var len = view.getUint8(offset); offset += 1;
         if((len & 0xc0) == 0xc0) {
+            if(follow) {
+                throw Error("Domain pointer is broken");
+            }
             var offset2 = ((len & ~0xc0) << 8) | view.getUint8(offset);
             offset += 1;
             if(nextPtr == 0) {
@@ -761,10 +768,15 @@ function decodeName(view, offset, packetView) {
             }
             offset = offset2;
             view = packetView;
+            if(!view) {
+                throw Error("Found compressed domain name when not expected");
+            }
+            follow = true;
+            continue;
             //break;  // Compressed DNS name
         } else
         if(len > 63) {
-            fail;  // Broken DNS packet
+            throw Error('DNS label too long');  // Broken DNS packet
         } else
         if(len == 0) {
             break;  // End of DNS name
@@ -773,7 +785,11 @@ function decodeName(view, offset, packetView) {
                 name += String.fromCharCode(view.getUint8(offset++))
             }
             name += '.'
+            if(name.length > 256) {
+                throw Error('DNS name too long');
+            }
         }
+        follow = false;
     }
     if(nextPtr > 0) {
         offset = nextPtr;
@@ -805,6 +821,7 @@ function decodeRecord(view, offset) {
     if(a.decode) {
         var value = a.decode(rview);
         console.log(`RValue: ${value}`);
+        rdata = value;
     }
     return [offset, name, type, class_, ttl, rdata];
 }
