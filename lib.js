@@ -3,7 +3,7 @@
 // DNS Header values
 
 // DNS message is a Query Response
-const qr_bit = 1 << 15;
+const qrBit = 1 << 15;
 
 // DNS operation
 const opcodes = {
@@ -14,9 +14,9 @@ const opcodes = {
     update: 5 * (1 << 11),
     dso:    6 * (1 << 11),
 };
-const opcode_mask = 0xf << 11;
+const opcodeMask = 0xf << 11;
 
-function find_opcode(value) {
+function findOpcode(value) {
     for(name in opcodes) {
         if(opcodes[name] === value) {
             return name;
@@ -147,7 +147,7 @@ const rcodes = [
         standard: "[RFC7873]",
     },
 ];
-const rcode_mask = 0xf;
+const rcodeMask = 0xf;
 
 // DNS header flags
 const flags = {
@@ -159,7 +159,7 @@ const flags = {
     CD: 1 << 4,
 };
 
-function find_flags(value) {
+function findFlags(value) {
     list = [];
     for(name in flags) {
         if((flags[name] & value) === flags[name]) {
@@ -169,7 +169,7 @@ function find_flags(value) {
     return list;
 }
 
-function decode_a(value) {
+function decodeA(value) {
     return `${value.getUint8(0)}.${value.getUint8(1)}.${value.getUint8(2)}.${value.getUint8(3)}`;
 }
 
@@ -180,7 +180,7 @@ const rrtype = [
         name: "A",
         descr: "a host address",
         standard: "[RFC1035]",
-        decode: decode_a,
+        decode: decodeA,
     },
     {
         code: 2,
@@ -742,25 +742,25 @@ const rrclass = [
     },
 ];
 
-function decode_name(view, offset, packet_view) {
+function decodeName(view, offset, packetView) {
     // TODO Check for compressed pointer to compress.
     // TODO Check for long DNS name
     // TODO Check for multiple compression layers
     // TODO Check for uncompressed DNS name support
     // TODO Check for broken DNS names
     // TODO Check duplicate DNS names
-    var next_ptr = 0;
+    var nextPtr = 0;
     var name = ''
     while(true) {
         var len = view.getUint8(offset); offset += 1;
         if((len & 0xc0) == 0xc0) {
             var offset2 = ((len & ~0xc0) << 8) | view.getUint8(offset);
             offset += 1;
-            if(next_ptr == 0) {
-                next_ptr = offset;
+            if(nextPtr == 0) {
+                nextPtr = offset;
             }
             offset = offset2;
-            view = packet_view;
+            view = packetView;
             //break;  // Compressed DNS name
         } else
         if(len > 63) {
@@ -775,15 +775,15 @@ function decode_name(view, offset, packet_view) {
             name += '.'
         }
     }
-    if(next_ptr > 0) {
-        offset = next_ptr;
+    if(nextPtr > 0) {
+        offset = nextPtr;
     }
 
     return [offset, name];
 }
 
-function decode_record_header(view, offset) {
-    var [ptr, name] = decode_name(view, offset, view);
+function decodeRecordHeader(view, offset) {
+    var [ptr, name] = decodeName(view, offset, view);
     var type = view.getUint16(ptr); ptr += 2;
     var class_ = view.getUint16(ptr); ptr += 2;
     type = rrtype.find(item => item.code === type).name;
@@ -791,9 +791,9 @@ function decode_record_header(view, offset) {
     return [ptr, name, type, class_];
 }
 
-function decode_record(view, offset) {
+function decodeRecord(view, offset) {
     var name, type, class_;
-    [offset, name, type, class_] = decode_record_header(view, offset);
+    [offset, name, type, class_] = decodeRecordHeader(view, offset);
     var ttl = view.getInt32(offset); offset += 4;
     var rdlength = view.getUint16(offset); offset += 2;
     console.log(`Record name: ${name}, type: ${type}, len: ${rdlength}`);
@@ -811,15 +811,15 @@ function decode_record(view, offset) {
 function decode(data) {
     console.log(data);
     var msg = {};
-    var ad_flag = 1 << 5;
+    var adFlag = 1 << 5;
     var view = new DataView(data);
     var ptr = 0;
     msg.id = view.getUint16(ptr);      ptr += 2;
     var header = view.getUint16(ptr);   ptr += 2;
-    msg.opcode = find_opcode(header & opcode_mask);
-    msg.response = (header & qr_bit) === qr_bit;
-    msg.rcode = rcodes.find(item => item.code === (header & rcode_mask)).name;
-    msg.flags = find_flags(header);
+    msg.opcode = findOpcode(header & opcodeMask);
+    msg.isResponse = (header & qrBit) === qrBit;
+    msg.rcode = rcodes.find(item => item.code === (header & rcodeMask)).name;
+    msg.flags = findFlags(header);
     msg.question = [];
     msg.answer = [];
     msg.authority = [];
@@ -830,30 +830,30 @@ function decode(data) {
     var arcount = view.getUint16(ptr); ptr += 2;
     for(var i = 0; i < qdcount; i++) {
         var name, type, class_;
-        [ptr, name, type, class_] = decode_record_header(view, ptr);
+        [ptr, name, type, class_] = decodeRecordHeader(view, ptr);
         msg.question.push({name: name, type: type, class: class_});
         console.log(`Q was ${name}, type: ${type}, class: ${class_}`);
     }
     for(var i = 0; i < ancount; i++) {
         var name, type, class_, ttl, rdata;
-        [ptr, name, type, class_, ttl, rdata] = decode_record(view, ptr);
+        [ptr, name, type, class_, ttl, rdata] = decodeRecord(view, ptr);
         console.log(`A was ${name}`);
         msg.answer.push({name: name, type: type, class: class_, ttl: ttl, rdata: rdata});
     }
     for(var i = 0; i < nscount; i++) {
         var name, type, class_, ttl, rdata;
-        [ptr, name, type, class_, ttl, rdata] = decode_record(view, ptr);
+        [ptr, name, type, class_, ttl, rdata] = decodeRecord(view, ptr);
         console.log(`N was ${name}`);
         msg.authority.push({name: name, type: type, class: class_, ttl: ttl, rdata: rdata});
     }
     for(var i = 0; i < arcount; i++) {
         var name, type, class_, ttl, rdata;
-        [ptr, name, type, class_, ttl, rdata] = decode_record(view, ptr);
+        [ptr, name, type, class_, ttl, rdata] = decodeRecord(view, ptr);
         console.log(`R was ${name}`);
         msg.additional.push({name: name, type: type, class: class_, ttl: ttl, rdata: rdata});
     }
     console.log(msg);
-    if((header & ad_flag) == ad_flag) {
+    if((header & adFlag) == adFlag) {
         console.log("Authenticated data for '" + domain + "': 0x" + header.toString(16) + "!");
     } else {
         console.log("Not authentic for '" + domain + "': 0x" + header.toString(16) + "!");
@@ -866,7 +866,7 @@ exports.DNSRequest = function DNSRequest(domain) {
     var fields = {
         id: Math.floor(Math.random()*65536),
         opcode: "QUERY",
-        response: false,
+        isResponse: false,
         rcode: "nOeRror",
         flags: [ "RD", "AD" ],
         question: [ { name: domain, type: "A", class: "IN" } ],
@@ -875,8 +875,8 @@ exports.DNSRequest = function DNSRequest(domain) {
         additional: [ { name: "", type: "OPT" } ],
     };
     var header = opcodes[fields.opcode.toLowerCase()];
-    if(fields.response) {
-        header |= qr_bit;
+    if(fields.isResponse) {
+        header |= qrBit;
     }
     header |= fields.flags.map(item => flags[item]).reduce((item, value) => item | value);
     header |= rcodes.find(item => item.name.toLowerCase() == fields.rcode.toLowerCase()).code;

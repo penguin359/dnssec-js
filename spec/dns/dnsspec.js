@@ -5,7 +5,7 @@ var rewire = require('rewire');
 
 describe("lib", function() {
   var lib = rewire('../../lib');
-  var decode_name = lib.__get__('decode_name');
+  var decodeName = lib.__get__('decodeName');
 
   xit("should encode a DNS message", function() {
     lib.DNSRequest({});
@@ -24,7 +24,7 @@ describe("lib", function() {
       view.setUint8(2, 'o'.charCodeAt(0));
       view.setUint8(3, 'm'.charCodeAt(0));
       view.setUint8(4, 0);
-      var [offset, name] = decode_name(view, 0, null);
+      var [offset, name] = decodeName(view, 0, null);
       expect(name).toBe('com.');
       expect(offset).toBe(5);
   });
@@ -47,7 +47,7 @@ describe("lib", function() {
       view.setUint8(i++, 'o'.charCodeAt(0));
       view.setUint8(i++, 'm'.charCodeAt(0));
       view.setUint8(i++, 0);
-      var [offset, name] = decode_name(view, 0, null);
+      var [offset, name] = decodeName(view, 0, null);
       expect(name).toBe('www.test.com.');
       expect(offset).toBe(i);
   });
@@ -76,7 +76,7 @@ describe("lib", function() {
       view.setUint8(i++, 'n'.charCodeAt(0));
       view.setUint8(i++, 's'.charCodeAt(0));
       view.setUint16(i++, 0xc000 | compression_offset); i++;
-      var [offset, name] = decode_name(view, start_offset, view);
+      var [offset, name] = decodeName(view, start_offset, view);
       expect(name).toBe('ns.test.com.');
       expect(offset).toBe(i);
   });
@@ -113,7 +113,44 @@ describe("lib", function() {
       view.setUint8(i++, 'l'.charCodeAt(0));
       view.setUint8(i++, 'd'.charCodeAt(0));
       view.setUint16(i++, 0xc000 | compression_offset2); i++;
-      var [offset, name] = decode_name(view, start_offset, view);
+      var [offset, name] = decodeName(view, start_offset, view);
+      expect(name).toBe('child.ns.test.com.');
+      expect(offset).toBe(i);
+  });
+
+  it("should decode a repeated DNS name with multi-level compression", function() {
+      var buf = new ArrayBuffer(32);
+      var view = new DataView(buf);
+      var i = 0;
+      view.setUint8(i++, 3);
+      view.setUint8(i++, 'w'.charCodeAt(0));
+      view.setUint8(i++, 'w'.charCodeAt(0));
+      view.setUint8(i++, 'w'.charCodeAt(0));
+      var compression_offset = i;
+      view.setUint8(i++, 4);
+      view.setUint8(i++, 't'.charCodeAt(0));
+      view.setUint8(i++, 'e'.charCodeAt(0));
+      view.setUint8(i++, 's'.charCodeAt(0));
+      view.setUint8(i++, 't'.charCodeAt(0));
+      view.setUint8(i++, 3);
+      view.setUint8(i++, 'c'.charCodeAt(0));
+      view.setUint8(i++, 'o'.charCodeAt(0));
+      view.setUint8(i++, 'm'.charCodeAt(0));
+      view.setUint8(i++, 0);
+      var compression_offset2 = i;
+      view.setUint8(i++, 2);
+      view.setUint8(i++, 'n'.charCodeAt(0));
+      view.setUint8(i++, 's'.charCodeAt(0));
+      view.setUint16(i++, 0xc000 | compression_offset); i++;
+      var start_offset = i;
+      view.setUint8(i++, 5);
+      view.setUint8(i++, 'c'.charCodeAt(0));
+      view.setUint8(i++, 'h'.charCodeAt(0));
+      view.setUint8(i++, 'i'.charCodeAt(0));
+      view.setUint8(i++, 'l'.charCodeAt(0));
+      view.setUint8(i++, 'd'.charCodeAt(0));
+      view.setUint16(i++, 0xc000 | compression_offset2); i++;
+      var [offset, name] = decodeName(view, start_offset, view);
       expect(name).toBe('child.ns.test.com.');
       expect(offset).toBe(i);
   });
