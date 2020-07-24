@@ -3,9 +3,9 @@
 //const domain = "www.google.com";
 const domain = "www.north-winds.org";
 //const domain = "www.alzatex.com";
-//const dns_server = "8.8.8.8";
-const dns_server = "10.248.2.1";
-//const dns_server = "ns.tallye.com";
+//const dnsServer = "8.8.8.8";
+const dnsServer = "10.248.2.1";
+//const dnsServer = "ns.tallye.com";
 
 
 var lib = require('./lib.js');
@@ -15,7 +15,7 @@ var socketId;
 var onReceive = function(info) {
     if(info.socketId !== socketId)
         return;
-    decode(info.data);
+    lib.decode(info.data);
 }
 
 console.log(lib.DNSRequest(domain));
@@ -46,11 +46,11 @@ function chrome() {
             if(info.socketId !== socketId)
                 return;
             console.log(info.data);
-            var ad_flag = 1 << 5;
+            var adFlag = 1 << 5;
             var view = new DataView(info.data);
             var flags = view.getUint16(2);
             var secure = false;
-            if((flags & ad_flag) == ad_flag) {
+            if((flags & adFlag) == adFlag) {
                 console.log("2Authenticated data for '" + domain + "': 0x" + flags.toString(16) + "!");
                 secure = true;
             } else {
@@ -98,7 +98,7 @@ server.on('message', (msg, rinfo) => {
         }
         return ab;
     }
-    decode(toArrayBuffer(msg))
+    lib.decode(toArrayBuffer(msg))
     process.exit(0);
 });
 
@@ -111,7 +111,7 @@ server.on('listening', () => {
     const address = server.address();
     console.log(`server listening ${address.address}:${address.port}`);
 });
-server.send(Buffer.from(lib.DNSRequest(domain)), 53, dns_server);
+server.send(Buffer.from(lib.DNSRequest(domain)), 53, dnsServer);
 
 //server.bind(41234);
 // Prints: server listening 0.0.0.0:41234

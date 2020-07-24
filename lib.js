@@ -17,7 +17,7 @@ const opcodes = {
 const opcodeMask = 0xf << 11;
 
 function findOpcode(value) {
-    for(name in opcodes) {
+    for(var name in opcodes) {
         if(opcodes[name] === value) {
             return name;
         }
@@ -160,8 +160,8 @@ const flags = {
 };
 
 function findFlags(value) {
-    list = [];
-    for(name in flags) {
+    var list = [];
+    for(var name in flags) {
         if((flags[name] & value) === flags[name]) {
             list.push(name);
         }
@@ -787,7 +787,8 @@ function decodeRecordHeader(view, offset) {
     var type = view.getUint16(ptr); ptr += 2;
     var class_ = view.getUint16(ptr); ptr += 2;
     type = rrtype.find(item => item.code === type).name;
-    class_ = rrclass.find(item => item.code === class_).name;
+    console.log(class_);
+    class_ = (rrclass.find(item => item.code === class_) || {name: `C${class_}`}).name;
     return [ptr, name, type, class_];
 }
 
@@ -859,8 +860,11 @@ function decode(data) {
         console.log("Not authentic for '" + domain + "': 0x" + header.toString(16) + "!");
     }
 }
+exports.decode = decode;
+var domain = '';
 
-exports.DNSRequest = function DNSRequest(domain) {
+exports.DNSRequest = function DNSRequest(domain_) {
+    domain = domain_;
     var arrayBuffer = new ArrayBuffer(4096);
     var view = new DataView(arrayBuffer);
     var fields = {
