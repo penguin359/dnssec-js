@@ -62,6 +62,7 @@ describe("lib", function() {
   var decodeName = lib.__get__('decodeName');
   var decodeRecordHeader = lib.__get__('decodeRecordHeader');
   var decodeRecord = lib.__get__('decodeRecord');
+  var encodePacket = lib.__get__('encodePacket');
 
   xit("should encode a DNS message", function() {
     lib.DNSRequest({});
@@ -933,5 +934,71 @@ describe("lib", function() {
       expect(rdata.digest).toBe("SHA1");
       expect(rdata.digest_hash).toBeDefined();
       expect(rdata.digest_hash).toBeInstanceOf(ArrayBuffer);
+  });
+
+  it("should encode an empty DNS request", function() {
+      var fields = {
+          id: Math.floor(Math.random()*65536),
+          opcode: "Query",
+          isResponse: false,
+          rcode: "nOeRror",
+          flags: [],
+          question: [],
+          answer: [],
+          authority: [],
+          additional: [],
+      };
+      var packet = encodePacket(fields);
+      var view = new DataView(packet);
+      expect(view.getUint16(0)).toBe(fields.id);
+      expect(view.getUint16(2)).toBe(0);   /* header */
+      expect(view.getUint16(4)).toBe(0);   /* question */
+      expect(view.getUint16(6)).toBe(0);   /* answer */
+      expect(view.getUint16(8)).toBe(0);   /* authority */
+      expect(view.getUint16(10)).toBe(0);  /* additional */
+      expect(view.getUint16(10)).toBe(0);  /* additional */
+      expect(packet.byteLength).toBe(12);
+  });
+
+  it("should encode an empty DNS request with default values", function() {
+      var fields = {
+          id: Math.floor(Math.random()*65536),
+      };
+      var packet = encodePacket(fields);
+      var view = new DataView(packet);
+      expect(view.getUint16(0)).toBe(fields.id);
+      expect(view.getUint16(2)).toBe(0);   /* header */
+      expect(view.getUint16(4)).toBe(0);   /* question */
+      expect(view.getUint16(6)).toBe(0);   /* answer */
+      expect(view.getUint16(8)).toBe(0);   /* authority */
+      expect(view.getUint16(10)).toBe(0);  /* additional */
+      expect(view.getUint16(10)).toBe(0);  /* additional */
+      expect(packet.byteLength).toBe(12);
+  });
+
+  it("should encode an basic IP address DNS request", function() {
+      var fields = {
+          id: Math.floor(Math.random()*65536),
+          flags: [ "RD", "AD" ],
+          question: [
+              { name: "com", type: "A", class: "IN" },
+          ],
+      };
+      var packet = encodePacket(fields);
+      var view = new DataView(packet);
+      expect(view.getUint16(0)).toBe(fields.id);
+      expect(view.getUint16(2)).toBe((1<<8)|(1<<5));   /* RD AD */
+      expect(view.getUint16(4)).toBe(1);   /* question */
+      expect(view.getUint16(6)).toBe(0);   /* answer */
+      expect(view.getUint16(8)).toBe(0);   /* authority */
+      expect(view.getUint16(10)).toBe(0);  /* additional */
+      expect(view.getUint8(12)).toBe(3);
+      expect(view.getUint8(13)).toBe('c'.charCodeAt(0));
+      expect(view.getUint8(14)).toBe('o'.charCodeAt(0));
+      expect(view.getUint8(15)).toBe('m'.charCodeAt(0));
+      expect(view.getUint8(16)).toBe(0);
+      expect(view.getUint16(17)).toBe(1);
+      expect(view.getUint16(19)).toBe(1);
+      expect(packet.byteLength).toBe(21);
   });
 });

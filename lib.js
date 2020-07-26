@@ -1075,7 +1075,7 @@ function decodeRecord(view, offset) {
     return [offset, name, type, class_, ttl, rdata];
 }
 
-function decode(data) {
+function decodePacket(data) {
     console.log(data);
     var msg = {};
     var adFlag = 1 << 5;
@@ -1126,29 +1126,33 @@ function decode(data) {
         console.log("Not authentic for '" + domain + "': 0x" + header.toString(16) + "!");
     }
 }
-exports.decode = decode;
+exports.decodePacket = decodePacket;
 var domain = '';
 
-exports.DNSRequest = function DNSRequest(domain_) {
-    domain = domain_;
+function encodePacket(fields) {
     var arrayBuffer = new ArrayBuffer(4096);
     var view = new DataView(arrayBuffer);
-    var fields = {
-        id: Math.floor(Math.random()*65536),
-        opcode: "QUERY",
-        isResponse: false,
-        rcode: "nOeRror",
-        flags: [ "RD", "AD" ],
-        question: [ { name: domain, type: "A", class: "IN" } ],
-        answer: [],
-        authority: [],
-        additional: [ { name: "", type: "OPT" } ],
-    };
+
+    if(!fields.opcode)
+        fields.opcode = "query";
+    if(!fields.rcode)
+        fields.rcode = "NoError";
+    if(!fields.flags)
+        fields.flags = [];
+    if(!fields.question)
+        fields.question = [];
+    if(!fields.answer)
+        fields.answer = [];
+    if(!fields.authority)
+        fields.authority = [];
+    if(!fields.additional)
+        fields.additional = [];
+
     var header = opcodes[fields.opcode.toLowerCase()];
     if(fields.isResponse) {
         header |= qrBit;
     }
-    header |= fields.flags.map(item => flags[item]).reduce((item, value) => item | value);
+    header |= fields.flags.map(item => flags[item]).reduce((item, value) => item | value, 0);
     header |= rcodes.find(item => item.name.toLowerCase() == fields.rcode.toLowerCase()).code;
     var ptr = 0;
     view.setUint16(ptr, fields.id);                ptr += 2;
@@ -1191,10 +1195,23 @@ exports.DNSRequest = function DNSRequest(domain_) {
         */
 
     }
-    var buf2 = new ArrayBuffer(ptr);
-    var view2 = new DataView(buf2);
-    for(var i = 0; i < ptr; i++)
-        view2.setUint8(i, view.getUint8(i));
-    arrayBuffer = buf2;
-    return arrayBuffer;
+    return arrayBuffer.slice(0, ptr);
+}
+
+exports.DNSRequest = function DNSRequest(domain_, id) {
+    domain = domain_;
+    if(id == null)
+        id = Math.floor(Math.random()*65536);
+    var fields = {
+        id: id,
+        opcode: "QUERY",
+        isResponse: false,
+        rcode: "nOeRror",
+        flags: [ "RD", "AD" ],
+        question: [ { name: domain, type: "A", class: "IN" } ],
+        answer: [],
+        authority: [],
+        additional: [ { name: "", type: "OPT" } ],
+    };
+    return encodePacket(fields);
 }

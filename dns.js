@@ -15,7 +15,7 @@ var socketId;
 var onReceive = function(info) {
     if(info.socketId !== socketId)
         return;
-    lib.decode(info.data);
+    lib.decodePacket(info.data);
 }
 
 console.log(lib.DNSRequest(domain));
@@ -98,7 +98,7 @@ server.on('message', (msg, rinfo) => {
         }
         return ab;
     }
-    lib.decode(toArrayBuffer(msg))
+    lib.decodePacket(toArrayBuffer(msg))
     process.exit(0);
 });
 
