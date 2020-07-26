@@ -1148,6 +1148,8 @@ function encodePacket(fields) {
     if(!fields.additional)
         fields.additional = [];
 
+    if(fields.flags.indexOf("DO") >= 0 && fields.additional.length <= 0)
+        fields.additional.push({ name: "", type: "OPT", class: null });
     var header = opcodes[fields.opcode.toLowerCase()];
     if(fields.isResponse) {
         header |= qrBit;
@@ -1186,14 +1188,11 @@ function encodePacket(fields) {
         }
         view.setUint8(ptr++, 0); /* zero-length root label */
         view.setUint16(ptr, rrtype.find(item => item.name == fields.additional[i].type).code);   ptr += 2;
-        /*
         view.setUint16(ptr, 4096); ptr += 2;
         view.setUint8(ptr,  0); ptr += 1;
         view.setUint8(ptr,  0); ptr += 1;
         view.setUint16(ptr,  1 << 15); ptr += 2;
         view.setUint16(ptr,  0); ptr += 2;
-        */
-
     }
     return arrayBuffer.slice(0, ptr);
 }

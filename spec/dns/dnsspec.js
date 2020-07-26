@@ -1001,4 +1001,37 @@ describe("lib", function() {
       expect(view.getUint16(19)).toBe(1);
       expect(packet.byteLength).toBe(21);
   });
+
+  it("should encode an DNSSEC IP address DNS request", function() {
+      var fields = {
+          id: Math.floor(Math.random()*65536),
+          flags: [ "RD", "AD", "DO" ],
+          question: [
+              { name: "com", type: "A", class: "IN" },
+          ],
+      };
+      var packet = encodePacket(fields);
+      var view = new DataView(packet);
+      expect(view.getUint16(0)).toBe(fields.id);
+      expect(view.getUint16(2)).toBe((1<<8)|(1<<5));   /* RD AD */
+      expect(view.getUint16(4)).toBe(1);   /* question */
+      expect(view.getUint16(6)).toBe(0);   /* answer */
+      expect(view.getUint16(8)).toBe(0);   /* authority */
+      expect(view.getUint16(10)).toBe(1);  /* additional */
+      expect(view.getUint8(12)).toBe(3);   /* com. */
+      expect(view.getUint8(13)).toBe('c'.charCodeAt(0));
+      expect(view.getUint8(14)).toBe('o'.charCodeAt(0));
+      expect(view.getUint8(15)).toBe('m'.charCodeAt(0));
+      expect(view.getUint8(16)).toBe(0);
+      expect(view.getUint16(17)).toBe(1);  /* Type A */
+      expect(view.getUint16(19)).toBe(1);  /* Class IN */
+      expect(view.getUint8(21)).toBe(0);   /* . */
+      expect(view.getUint16(22)).toBe(41); /* Type OPT */
+      expect(view.getUint16(24)).toBe(4096);  /* UDP Max Size */
+      expect(view.getUint8(26)).toBe(0);  /* Ext. RCODE */
+      expect(view.getUint8(27)).toBe(0);  /* EDNS Version */
+      expect(view.getUint16(28)).toBe(1<<15);  /* DO Flag */
+      expect(view.getUint16(30)).toBe(0);  /* RDATA Length */
+      expect(packet.byteLength).toBe(32);
+  });
 });
