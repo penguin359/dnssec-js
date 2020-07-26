@@ -100,9 +100,9 @@ const rcodes = [
     },
     {
         code: 16,
-            name: "BADVERS",
-            descr: "Bad OPT Version",
-            standard: "[RFC6891]",
+        name: "BADVERS",
+        descr: "Bad OPT Version",
+        standard: "[RFC6891]",
     },
     {
         code: 17,
@@ -169,6 +169,169 @@ function findFlags(value) {
     return list;
 }
 
+
+var dnskeyAlgorithms = [
+    {
+        code: 0,
+        name: "DELETE",
+        descr: "Delete DS",
+        zone_signing: false,
+        tx_sec: false,
+        standard: "[RFC4034][proposed standard][RFC4398][proposed standard][RFC8078][proposed standard]",
+    },
+    {
+        code: 1,
+        name: "RSAMD5",
+        descr: "RSA/MD5 (deprecated, see 5)",
+        zone_signing: false,
+        tx_sec: true,
+        standard: "[RFC3110][proposed standard][RFC4034][proposed standard]",
+    },
+    {
+        code: 2,
+        name: "DH",
+        descr: "Diffie-Hellman",
+        zone_signing: false,
+        tx_sec: true,
+        standard: "[RFC2539][proposed standard]",
+    },
+    {
+        code: 3,
+        name: "DSA",
+        descr: "DSA/SHA1",
+        zone_signing: true,
+        tx_sec: true,
+        standard: "[RFC3755][proposed standard][RFC2536][proposed standard][Federal Information Processing Standards Publication (FIPS PUB) 186, Digital Signature Standard, 18 May 1994.][Federal Information Processing Standards Publication (FIPS PUB) 180-1, Secure Hash Standard, 17 April 1995. (Supersedes FIPS PUB 180 dated 11 May 1993.)]",
+    },
+    {
+        code: 5,
+        name: "RSASHA1",
+        descr: "RSA/SHA-1",
+        zone_signing: true,
+        tx_sec: true,
+        standard: "[RFC3110][proposed standard][RFC4034][proposed standard]",
+    },
+    {
+        code: 6,
+        name: "DSA-NSEC3-SHA1",
+        descr: "DSA-NSEC3-SHA1",
+        zone_signing: true,
+        tx_sec: true,
+        standard: "[RFC5155][proposed standard]",
+    },
+    {
+        code: 7,
+        name: "RSASHA1-NSEC3-SHA1",
+        descr: "RSASHA1-NSEC3-SHA1",
+        zone_signing: true,
+        tx_sec: true,
+        standard: "[RFC5155][proposed standard]",
+    },
+    {
+        code: 8,
+        name: "RSASHA256",
+        descr: "RSA/SHA-256",
+        zone_signing: true,
+        tx_sec: false,
+        standard: "[RFC5702][proposed standard]",
+    },
+    {
+        code: 10,
+        name: "RSASHA512",
+        descr: "RSA/SHA-512",
+        zone_signing: true,
+        tx_sec: false,
+        standard: "[RFC5702][proposed standard]",
+    },
+    {
+        code: 12,
+        name: "ECC-GOST",
+        descr: "GOST R 34.10-2001",
+        zone_signing: true,
+        tx_sec: false,
+        standard: "[RFC5933][proposed standard]",
+    },
+    {
+        code: 13,
+        name: "ECDSAP256SHA256",
+        descr: "ECDSA Curve P-256 with SHA-256",
+        zone_signing: true,
+        tx_sec: false,
+        standard: "[RFC6605][proposed standard]",
+    },
+    {
+        code: 14,
+        name: "ECDSAP384SHA384",
+        descr: "ECDSA Curve P-384 with SHA-384",
+        zone_signing: true,
+        tx_sec: false,
+        standard: "[RFC6605][proposed standard]",
+    },
+    {
+        code: 15,
+        name: "ED25519",
+        descr: "Ed25519",
+        zone_signing: true,
+        tx_sec: false,
+        standard: "[RFC8080][proposed standard]",
+    },
+    {
+        code: 16,
+        name: "ED448",
+        descr: "Ed448",
+        zone_signing: true,
+        tx_sec: false,
+        standard: "[RFC8080][proposed standard]",
+    },
+    {
+        code: 252,
+        name: "INDIRECT",
+        descr: "Reserved for Indirect Keys",
+        zone_signing: false,
+        tx_sec: false,
+        standard: "[RFC4034][proposed standard]",
+    },
+    {
+        code: 253,
+        name: "PRIVATEDNS",
+        descr: "private algorithm",
+        zone_signing: true,
+        tx_sec: true,
+        standard: "[RFC4034][proposed standard]",
+    },
+    {
+        code: 254,
+        name: "PRIVATEOID",
+        descr: "private algorithm OID",
+        zone_signing: true,
+        tx_sec: true,
+        standard: "[RFC4034][proposed standard]",
+    },
+];
+
+var dsDigests = [
+    {
+        code: 1,
+        name: "SHA1",
+        standard: "[RFC3658]",
+    },
+    {
+        code: 2,
+        name: "SHA256",
+        standard: "[RFC4509]",
+    },
+    {
+        code: 3,
+        name: "GOST R 34.11-94",
+        standard: "[RFC5933]",
+    },
+    {
+        code: 4,
+        name: "SHA384",
+        standard: "[RFC6605]",
+    },
+];
+
 function decodeA(value) {
     return `${value.getUint8(0)}.${value.getUint8(1)}.${value.getUint8(2)}.${value.getUint8(3)}`;
 }
@@ -215,6 +378,16 @@ function decodeMX(value, view) {
 function decodeTXT(value) {
     var [_, txt] = decodeString(value, 0);
     return txt;
+}
+
+function decodeDS(value) {
+    var tag = value.getUint16(0);
+    var algorithm = value.getUint8(2);
+    var digest = value.getUint8(3);
+    var hash = value.buffer.slice(4, 4+20);
+    algorithm = dnskeyAlgorithms.find(item => item.code === algorithm).name;
+    digest = dsDigests.find(item => item.code === digest).name;
+    return { tag: tag, algorithm: algorithm, digest: digest, digest_hash: hash };
 }
 
 // Resource Record types
@@ -489,6 +662,7 @@ const rrtype = [
         name: "DS",
         descr: "Delegation Signer",
         standard: "[RFC4034][RFC3658]",
+        decode: decodeDS,
     },
     {
         code: 44,

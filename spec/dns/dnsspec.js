@@ -872,4 +872,66 @@ describe("lib", function() {
       expect(ttl).toBe(512);
       expect(rdata).toBe("a:100:1000:0:20:a00:0:1");
   });
+
+  it("should decode an AAAA record", function() {
+      var buf = new ArrayBuffer(128);
+      var view = new DataView(buf);
+
+      var packer = new Packer(view);
+      var testOffset = packer.getOffset();
+      packer.packLabels(['test', 'com', '.']);
+      packer.packUint16(28);   /* RR Type AA */
+      packer.packUint16(1);    /* RR Class IN */
+      packer.packUint32(512);  /* RR TTL */
+      packer.packUint16(16);   /* RR Data length */
+      packer.packUint16(10);
+      packer.packUint16(256);
+      packer.packUint16(4096);
+      packer.packUint16(0);
+      packer.packUint16(32);
+      packer.packUint16(2560);
+      packer.packUint16(0);
+      packer.packUint16(1);
+
+      var [offset, name, type, class_, ttl, rdata] = decodeRecord(view, testOffset);
+      expect(offset).toBe(packer.getOffset());
+      expect(name).toBe('test.com.');
+      expect(type).toBe('AAAA');
+      expect(class_).toBe('IN');
+      expect(ttl).toBe(512);
+      expect(rdata).toBe("a:100:1000:0:20:a00:0:1");
+  });
+
+  it("should decode a DS record", function() {
+      var buf = new ArrayBuffer(128);
+      var view = new DataView(buf);
+
+      var packer = new Packer(view);
+      packer.packLabels(['test', 'com', '.']);
+      packer.packUint16(43);   /* RR Type DS */
+      packer.packUint16(1);    /* RR Class IN */
+      packer.packUint32(512);  /* RR TTL */
+      packer.packUint16(24);   /* RR Data length */
+      packer.packUint16(12345);/* Key tag */
+      packer.packUint8(5);     /* Algorithm RSA/SHA-1 */
+      packer.packUint8(1);     /* Digest SHA-1 */
+      for(var i = 0; i < 20; i++)
+          packer.packUint8(0); /* Digest Data */
+
+      var [offset, name, type, class_, ttl, rdata] = decodeRecord(view, 0);
+      expect(offset).toBe(packer.getOffset());
+      expect(name).toBe('test.com.');
+      expect(type).toBe('DS');
+      expect(class_).toBe('IN');
+      expect(ttl).toBe(512);
+      expect(rdata).toBeDefined();
+      expect(rdata.tag).toBeDefined();
+      expect(rdata.tag).toBe(12345);
+      expect(rdata.algorithm).toBeDefined();
+      expect(rdata.algorithm).toBe("RSASHA1");
+      expect(rdata.digest).toBeDefined();
+      expect(rdata.digest).toBe("SHA1");
+      expect(rdata.digest_hash).toBeDefined();
+      expect(rdata.digest_hash).toBeInstanceOf(ArrayBuffer);
+  });
 });
