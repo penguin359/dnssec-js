@@ -173,6 +173,50 @@ function decodeA(value) {
     return `${value.getUint8(0)}.${value.getUint8(1)}.${value.getUint8(2)}.${value.getUint8(3)}`;
 }
 
+function decodeAAAA(value) {
+    return `${value.getUint16(0).toString(16)}:${value.getUint16(2).toString(16)}:${value.getUint16(4).toString(16)}:${value.getUint16(6).toString(16)}:${value.getUint16(8).toString(16)}:${value.getUint16(10).toString(16)}:${value.getUint16(12).toString(16)}:${value.getUint16(14).toString(16)}`;
+}
+
+function decodeCNAME(value, view) {
+    var [offset, name] = decodeName(value, 0, view);
+    return name;
+}
+
+function decodeHINFO(value) {
+    var [offset, cpu] = decodeString(value, 0);
+    var [_, os] = decodeString(value, offset);
+    return { cpu: cpu, os: os };
+}
+
+function decodeMINFO(value, view) {
+    var [offset, rmailbx] = decodeName(value, 0, view);
+    var [_, emailbx] = decodeName(value, offset, view);
+    return { rmailbx: rmailbx, emailbx: emailbx };
+}
+
+function decodeSOA(value, view) {
+    var [offset, mname] = decodeName(value, 0, view);
+    var [offset, rname] = decodeName(value, offset, view);
+    var serial  = value.getUint32(offset + 0*4);
+    var refresh = value.getUint32(offset + 1*4);
+    var retry   = value.getUint32(offset + 2*4);
+    var expire  = value.getUint32(offset + 3*4);
+    var minimum = value.getUint32(offset + 4*4);
+
+    return { mname: mname, rname: rname, serial: serial, refresh: refresh, retry: retry, expire: expire, minimum: minimum };
+}
+
+function decodeMX(value, view) {
+    var pref = value.getUint16(0);
+    var [offset, exchange] = decodeName(value, 2, view);
+    return { pref: pref, exchange: exchange };
+}
+
+function decodeTXT(value) {
+    var [_, txt] = decodeString(value, 0);
+    return txt;
+}
+
 // Resource Record types
 const rrtype = [
     {
@@ -187,36 +231,42 @@ const rrtype = [
         name: "NS",
         descr: "an authoritative name server",
         standard: "[RFC1035]",
+        decode: decodeCNAME,
     },
     {
         code: 3,
         name: "MD",
         descr: "a mail destination (OBSOLETE - use MX)",
         standard: "[RFC1035]",
+        decode: decodeCNAME,
     },
     {
         code: 4,
         name: "MF",
         descr: "a mail forwarder (OBSOLETE - use MX)",
         standard: "[RFC1035]",
+        decode: decodeCNAME,
     },
     {
         code: 5,
         name: "CNAME",
         descr: "the canonical name for an alias",
         standard: "[RFC1035]",
+        decode: decodeCNAME,
     },
     {
         code: 6,
         name: "SOA",
         descr: "marks the start of a zone of authority",
         standard: "[RFC1035]",
+        decode: decodeSOA,
     },
     {
         code: 7,
         name: "MB",
         descr: "a mailbox domain name (EXPERIMENTAL)",
         standard: "[RFC1035]",
+        decode: decodeCNAME,
     },
     {
         code: 8,
@@ -229,6 +279,7 @@ const rrtype = [
         name: "MR",
         descr: "a mail rename domain name (EXPERIMENTAL)",
         standard: "[RFC1035]",
+        decode: decodeCNAME,
     },
     {
         code: 10,
@@ -245,32 +296,36 @@ const rrtype = [
     {
         code: 12,
         name: "PTR",
-        descr: "a domain name pointer",
         standard: "[RFC1035]",
+        decode: decodeCNAME,
     },
     {
         code: 13,
         name: "HINFO",
         descr: "host information",
         standard: "[RFC1035]",
+        decode: decodeHINFO,
     },
     {
         code: 14,
         name: "MINFO",
         descr: "mailbox or mail list information",
         standard: "[RFC1035]",
+        decode: decodeMINFO,
     },
     {
         code: 15,
         name: "MX",
         descr: "mail exchange",
         standard: "[RFC1035]",
+        decode: decodeMX,
     },
     {
         code: 16,
         name: "TXT",
         descr: "text strings",
         standard: "[RFC1035]",
+        decode: decodeTXT,
     },
     {
         code: 17,
@@ -343,6 +398,7 @@ const rrtype = [
         name: "AAAA",
         descr: "IP6 Address",
         standard: "[RFC3596]",
+        decode: decodeAAAA,
     },
     {
         code: 29,
@@ -798,12 +854,31 @@ function decodeName(view, offset, packetView) {
     return [offset, name];
 }
 
+function decodeString(view, offset) {
+    // TODO Check for compressed pointer to compress.
+    // TODO Check for long DNS name
+    // TODO Check for multiple compression layers
+    // TODO Check for uncompressed DNS name support
+    // TODO Check for broken DNS names
+    // TODO Check duplicate DNS names
+    // TODO Check for exact DNS limits
+    // TODO Check for label truncated
+    // TODO Check for pointer outside range
+    var name = ''
+    var len = view.getUint8(offset); offset += 1;
+    for(var j = 0; j < len; j++) {
+        name += String.fromCharCode(view.getUint8(offset++))
+    }
+
+    return [offset, name];
+}
+
 function decodeRecordHeader(view, offset) {
     var [ptr, name] = decodeName(view, offset, view);
     var type = view.getUint16(ptr); ptr += 2;
     var class_ = view.getUint16(ptr); ptr += 2;
     type = rrtype.find(item => item.code === type).name;
-    console.log(class_);
+    //console.log(class_);
     class_ = (rrclass.find(item => item.code === class_) || {name: `C${class_}`}).name;
     return [ptr, name, type, class_];
 }
@@ -813,14 +888,14 @@ function decodeRecord(view, offset) {
     [offset, name, type, class_] = decodeRecordHeader(view, offset);
     var ttl = view.getInt32(offset); offset += 4;
     var rdlength = view.getUint16(offset); offset += 2;
-    console.log(`Record name: ${name}, type: ${type}, len: ${rdlength}`);
+    //console.log(`Record name: ${name}, type: ${type}, len: ${rdlength}`);
     var rdata = view.buffer.slice(offset, offset+rdlength);
     var rview = new DataView(rdata);
     offset += rdlength;
     var a = rrtype.find(item => item.name == type);
     if(a.decode) {
-        var value = a.decode(rview);
-        console.log(`RValue: ${value}`);
+        var value = a.decode(rview, view);
+        //console.log(`RValue: ${value}`);
         rdata = value;
     }
     return [offset, name, type, class_, ttl, rdata];
@@ -933,11 +1008,14 @@ exports.DNSRequest = function DNSRequest(domain_) {
         }
         view.setUint8(ptr++, 0); /* zero-length root label */
         view.setUint16(ptr, rrtype.find(item => item.name == fields.additional[i].type).code);   ptr += 2;
+        /*
         view.setUint16(ptr, 4096); ptr += 2;
         view.setUint8(ptr,  0); ptr += 1;
         view.setUint8(ptr,  0); ptr += 1;
         view.setUint16(ptr,  1 << 15); ptr += 2;
         view.setUint16(ptr,  0); ptr += 2;
+        */
+
     }
     var buf2 = new ArrayBuffer(ptr);
     var view2 = new DataView(buf2);

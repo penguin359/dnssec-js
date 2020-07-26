@@ -3,8 +3,8 @@
 //const domain = "www.google.com";
 const domain = "www.north-winds.org";
 //const domain = "www.alzatex.com";
-//const dnsServer = "8.8.8.8";
-const dnsServer = "10.248.2.1";
+const dnsServer = "8.8.8.8";
+//const dnsServer = "10.248.2.1";
 //const dnsServer = "ns.tallye.com";
 
 
