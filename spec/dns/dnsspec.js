@@ -1,6 +1,7 @@
 'use strict';
 
 var rewire = require('rewire');
+var base64 = require('base64-arraybuffer');
 
 class Packer {
     constructor(view) {
@@ -934,6 +935,52 @@ describe("lib", function() {
       expect(rdata.digest).toBe("SHA1");
       expect(rdata.digest_hash).toBeDefined();
       expect(rdata.digest_hash).toBeInstanceOf(ArrayBuffer);
+  });
+
+  it("should decode a DNSKEY record", function() {
+      var buf = new ArrayBuffer(256);
+      var view = new DataView(buf);
+
+      var packer = new Packer(view);
+      packer.packLabels(['test', 'com', '.']);
+      packer.packUint16(48);   /* RR Type DNSKEY */
+      packer.packUint16(1);    /* RR Class IN */
+      packer.packUint32(512);  /* RR TTL */
+      var key = base64.decode(
+          "AQPPQ2tvH4YbcKOsaHDO12qf5XsKPQhauMUmvcO5SCgBKqCXA7MuEkrh" +
+          "SjeRrDu/pcWF7NBuPdE3e7ETUcnqB0s7p9rTbIN15J+swZGRTsdK6lXw" +
+          "hUmtl5OFnKx0eqgwpIdoqoG0hsrrtLGTzn48qHWfNXKDXmjfZPiT+UPf" +
+          "J57+bw==");
+      expect(key.byteLength).toBe(1024/8 + 1 + 1);
+      var key_view = new DataView(key);
+      packer.packUint16(key.byteLength+4);   /* RR Data length */
+      packer.packUint16(256);  /* Key flags ZONE */
+      packer.packUint8(3);     /* Protocol DNSSEC */
+      packer.packUint8(5);     /* Algorithm RSA/SHA-1 */
+      for(var i = 0; i < key.byteLength; i++)
+          packer.packUint8(key_view.getUint8(i)); /* Key Data */
+
+      var [offset, name, type, class_, ttl, rdata] = decodeRecord(view, 0);
+      expect(offset).toBe(packer.getOffset());
+      expect(name).toBe('test.com.');
+      expect(type).toBe('DNSKEY');
+      expect(class_).toBe('IN');
+      expect(ttl).toBe(512);
+      expect(rdata).toBeDefined();
+      expect(rdata.tag).toBeDefined();
+      expect(rdata.tag).toBe(52406);
+      expect(rdata.flags).toBeDefined();
+      expect(rdata.flags).toBe(256);
+      expect(rdata.protocol).toBeDefined();
+      expect(rdata.protocol).toBe("DNSSEC");
+      expect(rdata.algorithm).toBeDefined();
+      expect(rdata.algorithm).toBe("RSASHA1");
+      expect(rdata.key).toBeDefined();
+      expect(rdata.key.exponent).toBeDefined();
+      expect(rdata.key.exponent).toBe(3);
+      expect(rdata.key.modulus).toBeDefined();
+      expect(rdata.key.modulus).toBeInstanceOf(ArrayBuffer);
+      expect(rdata.key.modulus.byteLength).toBe(1024/8);
   });
 
   it("should encode an empty DNS request", function() {

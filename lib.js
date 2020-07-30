@@ -170,6 +170,43 @@ function findFlags(value) {
 }
 
 
+var dnskeyProtocols = [
+    {
+        code: 1,
+        name: "TLS",
+        standard: "[RFC2535]",
+    },
+    {
+        code: 2,
+        name: "EMAIL",
+        standard: "[RFC2535]",
+    },
+    {
+        code: 3,
+        name: "DNSSEC",
+        standard: "[RFC2535][RFC4034]",
+    },
+    {
+        code: 4,
+        name: "IPSEC",
+        standard: "[RFC2535]",
+    },
+    {
+        code: 255,
+        name: "All",
+        standard: "[RFC2535]",
+    },
+];
+
+function decodeRSA(key) {
+    // TODO Check for multi-byte exponent
+    // TODO Check for long exponent length
+    var expLen = key.getUint8(0);
+    var exp = key.getUint8(1);
+    var mod = key.buffer.slice(2);
+    return { exponent: exp, modulus: mod };
+}
+
 var dnskeyAlgorithms = [
     {
         code: 0,
@@ -210,6 +247,7 @@ var dnskeyAlgorithms = [
         zone_signing: true,
         tx_sec: true,
         standard: "[RFC3110][proposed standard][RFC4034][proposed standard]",
+        decodeKey: decodeRSA,
     },
     {
         code: 6,
@@ -388,6 +426,29 @@ function decodeDS(value) {
     algorithm = dnskeyAlgorithms.find(item => item.code === algorithm).name;
     digest = dsDigests.find(item => item.code === digest).name;
     return { tag: tag, algorithm: algorithm, digest: digest, digest_hash: hash };
+}
+
+function decodeDNSKEY(value) {
+    var sum = 0;
+    for(var i = 0; i < value.buffer.byteLength; i++) {
+        var octet =  value.getUint8(i);
+        sum += (i & 0x01) > 0 ? octet : octet << 8;
+    }
+    sum += (sum >> 16) & 0xffff;
+    sum &= 0xffff;
+    var flags = value.getUint16(0);
+    var protocol = value.getUint8(2);
+    var algorithm = value.getUint8(3);
+    var key = value.buffer.slice(4);
+    var protocol_details = dnskeyProtocols.find(item => item.code === protocol);
+    protocol = protocol_details.name;
+    var algorithmDetails = dnskeyAlgorithms.find(item => item.code === algorithm);
+    algorithm = algorithmDetails.name;
+    if(algorithmDetails.decodeKey) {
+        var key_view = new DataView(key);
+        key = algorithmDetails.decodeKey(key_view);
+    }
+    return { tag: sum, flags: flags, protocol: protocol, algorithm: algorithm, key: key };
 }
 
 // Resource Record types
@@ -694,6 +755,7 @@ const rrtype = [
         name: "DNSKEY",
         descr: "DNSKEY",
         standard: "[RFC4034][RFC3755]",
+        decode: decodeDNSKEY,
     },
     {
         code: 49,

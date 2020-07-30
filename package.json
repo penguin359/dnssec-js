@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/penguin359/dnssec-js#readme",
   "devDependencies": {
+    "base64-arraybuffer": "^0.2.0",
     "jasmine": "^3.5.0",
     "npm-watch": "^0.6.0",
     "rewire": "^5.0.0"
