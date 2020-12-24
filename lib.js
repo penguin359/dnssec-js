@@ -957,7 +957,7 @@ const rrtype = [
     },
     {
         code: 255,
-        name: "*",
+        name: "ANY",
         descr: "A request for some or all records the server has available",
         standard: "[RFC1035][RFC6895][RFC8482]",
     },
@@ -1269,7 +1269,7 @@ exports.DNSRequest = function DNSRequest(domain_, id) {
         isResponse: false,
         rcode: "nOeRror",
         flags: [ "RD", "AD" ],
-        question: [ { name: domain, type: "A", class: "IN" } ],
+        question: [ { name: domain, type: "ANY", class: "IN" } ],
         answer: [],
         authority: [],
         additional: [ { name: "", type: "OPT" } ],
