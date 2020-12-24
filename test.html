@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>DNS Test</title>
+    <script src="lib.js"> </script>
+  </head>
+  <body>
+    <h1>DNS Test</h1>
+  <script>
+    document.write('Test');
+    document.write(dnssec.decodePacket(dnssec.DNSRequest('www.google.com')));
+    document.write('Done.');
+  </script>
+  </body>
+</html>
