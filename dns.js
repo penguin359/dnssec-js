@@ -3,9 +3,7 @@
 //const domain = "www.google.com";
 //const domain = "www.north-winds.org";
 const domain = "north-winds.org";
-//const domain = "www.alzatex.com";
 const dnsServer = "8.8.8.8";
-//const dnsServer = "ns.tallye.com";
 
 
 var lib = require('./lib.js');
@@ -110,6 +108,12 @@ setTimeout(function() {
 server.on('listening', () => {
     const address = server.address();
     console.log(`server listening ${address.address}:${address.port}`);
+});
+//require('fs').open('dns-raw', 'w', (err, f) -> {
+require('fs').writeFile('dns-raw', Buffer.from(lib.DNSRequest(domain)), err => {
+    if(err) {
+	console.log(err);
+    }
 });
 server.send(Buffer.from(lib.DNSRequest(domain)), 53, dnsServer);
 
