@@ -1,3 +1,5 @@
 *.swp
 *~
 /node_modules/
+/dns-raw
+/package-lock.json
